@@ -1,3 +1,0 @@
-# Project dependencies
-pytest
-pytest-cov
