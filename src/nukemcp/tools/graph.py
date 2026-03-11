@@ -12,22 +12,15 @@ def register(server: NukeMCPServer):
     mcp = server.mcp
     conn = server.connection
 
-    @mcp.tool(
-        annotations={"readOnlyHint": True},
-    )
+    @mcp.tool(annotations={"readOnlyHint": True})
     def get_script_info() -> dict:
         """Get information about the current Nuke script.
 
         Returns script name, frame range, FPS, format, colorspace, and node count.
         """
-        response = conn.send({"type": "get_script_info", "params": {}})
-        if response["status"] == "error":
-            raise RuntimeError(response["error"])
-        return response["result"]
+        return conn.send_command("get_script_info")
 
-    @mcp.tool(
-        annotations={"readOnlyHint": True},
-    )
+    @mcp.tool(annotations={"readOnlyHint": True})
     def get_node_info(node_name: str) -> dict:
         """Get detailed information about a specific node.
 
@@ -36,10 +29,7 @@ def register(server: NukeMCPServer):
         Args:
             node_name: The name of the node to inspect.
         """
-        response = conn.send({"type": "get_node_info", "params": {"node_name": node_name}})
-        if response["status"] == "error":
-            raise RuntimeError(response["error"])
-        return response["result"]
+        return conn.send_command("get_node_info", {"node_name": node_name})
 
     @mcp.tool()
     def create_node(
@@ -63,15 +53,9 @@ def register(server: NukeMCPServer):
             params["knobs"] = knobs
         if position is not None:
             params["position"] = position
+        return conn.send_command("create_node", params)
 
-        response = conn.send({"type": "create_node", "params": params})
-        if response["status"] == "error":
-            raise RuntimeError(response["error"])
-        return response["result"]
-
-    @mcp.tool(
-        annotations={"idempotentHint": True},
-    )
+    @mcp.tool(annotations={"idempotentHint": True})
     def modify_node(node_name: str, knobs: dict) -> dict:
         """Modify knob values on an existing node.
 
@@ -79,17 +63,9 @@ def register(server: NukeMCPServer):
             node_name: The name of the node to modify.
             knobs: Dict of knob names to new values.
         """
-        response = conn.send({
-            "type": "modify_node",
-            "params": {"node_name": node_name, "knobs": knobs},
-        })
-        if response["status"] == "error":
-            raise RuntimeError(response["error"])
-        return response["result"]
+        return conn.send_command("modify_node", {"node_name": node_name, "knobs": knobs})
 
-    @mcp.tool(
-        annotations={"destructiveHint": True},
-    )
+    @mcp.tool(annotations={"destructiveHint": True})
     def delete_node(node_name: str, confirm: bool = False) -> dict:
         """Delete a node from the Nuke script.
 
@@ -110,11 +86,7 @@ def register(server: NukeMCPServer):
                     "Ask the user to confirm, then call again with confirm=True."
                 ),
             }
-
-        response = conn.send({"type": "delete_node", "params": {"node_name": node_name}})
-        if response["status"] == "error":
-            raise RuntimeError(response["error"])
-        return response["result"]
+        return conn.send_command("delete_node", {"node_name": node_name})
 
     @mcp.tool()
     def connect_nodes(
@@ -131,21 +103,13 @@ def register(server: NukeMCPServer):
             input_node: The name of the node whose input to connect to.
             input_index: Which input on the input_node to connect to (default 0).
         """
-        response = conn.send({
-            "type": "connect_nodes",
-            "params": {
-                "output_node": output_node,
-                "input_node": input_node,
-                "input_index": input_index,
-            },
+        return conn.send_command("connect_nodes", {
+            "output_node": output_node,
+            "input_node": input_node,
+            "input_index": input_index,
         })
-        if response["status"] == "error":
-            raise RuntimeError(response["error"])
-        return response["result"]
 
-    @mcp.tool(
-        annotations={"idempotentHint": True},
-    )
+    @mcp.tool(annotations={"idempotentHint": True})
     def position_node(node_name: str, x: int, y: int) -> dict:
         """Set the position of a node in the node graph.
 
@@ -154,13 +118,7 @@ def register(server: NukeMCPServer):
             x: X coordinate in the node graph.
             y: Y coordinate in the node graph.
         """
-        response = conn.send({
-            "type": "position_node",
-            "params": {"node_name": node_name, "x": x, "y": y},
-        })
-        if response["status"] == "error":
-            raise RuntimeError(response["error"])
-        return response["result"]
+        return conn.send_command("position_node", {"node_name": node_name, "x": x, "y": y})
 
     @mcp.tool()
     def auto_layout(node_names: list[str] | None = None) -> dict:
@@ -172,15 +130,9 @@ def register(server: NukeMCPServer):
         params = {}
         if node_names is not None:
             params["node_names"] = node_names
+        return conn.send_command("auto_layout", params)
 
-        response = conn.send({"type": "auto_layout", "params": params})
-        if response["status"] == "error":
-            raise RuntimeError(response["error"])
-        return response["result"]
-
-    @mcp.tool(
-        annotations={"destructiveHint": True},
-    )
+    @mcp.tool(annotations={"destructiveHint": True})
     def execute_python(code: str, confirm: bool = False) -> dict:
         """Execute arbitrary Python code in Nuke's environment.
 
@@ -202,8 +154,4 @@ def register(server: NukeMCPServer):
                     "then call again with confirm=True."
                 ),
             }
-
-        response = conn.send({"type": "execute_python", "params": {"code": code}})
-        if response["status"] == "error":
-            raise RuntimeError(response["error"])
-        return response["result"]
+        return conn.send_command("execute_python", {"code": code})

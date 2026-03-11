@@ -6,7 +6,7 @@ NukeMCP connects AI assistants (Claude, ChatGPT, local LLMs) to a running Nuke s
 
 ## Status
 
-**Phase 1 — Foundation.** Core node graph and script tools are implemented. Memory, production comp workflows, and advanced NukeX tools are on the [roadmap](nuke_mcp_roadmap.md).
+**Phase 1 — Foundation.** Core tools verified end-to-end against Nuke 17.0v1. Memory, production comp workflows, and advanced NukeX tools are on the [roadmap](nuke_mcp_roadmap.md).
 
 ## Requirements
 
@@ -21,10 +21,16 @@ NukeMCP connects AI assistants (Claude, ChatGPT, local LLMs) to a running Nuke s
 # Clone and install
 git clone https://github.com/kleer001/nuke-mcp.git
 cd nuke-mcp
-./bootstrap.sh    # or bootstrap.bat on Windows
+uv sync
+
+# Find Nuke on your machine and check licensing
+uv run nuke-mcp --discover
 
 # Run with mock Nuke (no Nuke required)
 uv run nuke-mcp --mock
+
+# Launch headless Nuke and connect automatically
+uv run nuke-mcp --headless
 
 # Run tests
 uv run pytest -v
@@ -32,16 +38,39 @@ uv run pytest -v
 
 ## Nuke Addon Setup
 
-Copy the addon files into your Nuke scripts directory:
+Copy the addon into your Nuke scripts directory:
 
 ```bash
 cp nuke_addon/nuke_mcp_addon.py ~/.nuke/
-cp nuke_addon/menu.py ~/.nuke/
 ```
 
 Or add the `nuke_addon/` directory to your `NUKE_PATH`.
 
-Launch Nuke — a **NukeMCP** menu appears. Click **Start Server** to open the panel and begin listening for connections.
+Launch Nuke — in the Script Editor, run:
+
+```python
+import nuke_mcp_addon
+nuke_mcp_addon.start()
+```
+
+A **NukeMCP** panel appears with Start/Stop button and log. The server listens on port 54321.
+
+## Headless Mode
+
+NukeMCP can auto-discover and launch Nuke without a GUI:
+
+```bash
+# Auto-discover Nuke, launch headless, connect
+uv run nuke-mcp --headless
+
+# Specify a Nuke executable
+uv run nuke-mcp --headless --nuke-path /usr/local/Nuke17.0v1/Nuke17.0
+
+# Just find Nuke installations and check licensing
+uv run nuke-mcp --discover
+```
+
+Discovery searches standard paths (`/usr/local/Nuke*`, `/Applications/Nuke*`), `.desktop` files, running processes, mounted volumes, and the `NUKE_EXE` environment variable. It also detects Foundry trial licenses (JWT tokens) and RLM license servers.
 
 ## Connecting to an AI Client
 
@@ -66,6 +95,13 @@ Add to your Claude Desktop config (`~/Library/Application Support/Claude/claude_
 
 ## Available Tools
 
+13 core tools available on all Nuke variants, plus gated tools for NukeX and Nuke 17+. Destructive tools require user confirmation — enforced at the code level, not just in the AI's instructions.
+
+<details>
+<summary>Full tool list (40+ tools)</summary>
+
+### Core (all variants)
+
 | Tool | Description | Annotations |
 |---|---|---|
 | `get_script_info` | Script name, frame range, FPS, colorspace, node count | readOnly |
@@ -82,7 +118,50 @@ Add to your Claude Desktop config (`~/Library/Application Support/Claude/claude_
 | `set_project_settings` | Set FPS, colorspace, resolution | idempotent |
 | `set_frame_range` | Set first/last frame | idempotent |
 
-Destructive tools require the AI to ask for user confirmation before executing. This is enforced at the code level — not just in the AI's instructions.
+### Comp & Rendering
+
+| Tool | Description |
+|---|---|
+| `render_frames` | Render a Write node over a frame range |
+| `set_proxy_mode` | Toggle proxy mode |
+| `find_nodes_by_type` | Find all nodes of a given class |
+| `find_broken_reads` | Find Read nodes with missing files |
+| `find_error_nodes` | Find all nodes in error state |
+| `batch_set_knob` | Set a knob value on multiple nodes |
+| `batch_reconnect` | Reconnect multiple nodes to a new input |
+
+### Templates & LiveGroups
+
+| Tool | Description |
+|---|---|
+| `list_toolsets` | List saved toolsets |
+| `load_toolset` | Load a toolset |
+| `save_toolset` | Save selected nodes as a toolset |
+| `create_live_group` | Create a LiveGroup from nodes |
+
+### NukeX (gated)
+
+| Tool | Description |
+|---|---|
+| `create_tracker` | Create a Tracker4 node |
+| `solve_tracker` | Execute tracking |
+| `setup_stabilize` | Set tracker to stabilize mode |
+| `create_camera_tracker` | Create a CameraTracker node |
+| `create_3d_camera` | Create a 3D camera |
+| `create_3d_light` | Create a 3D light |
+| `create_deep_merge` | Deep compositing merge |
+| `create_deep_recolor` | Deep recolor node |
+| `create_copycat` | CopyCat ML training node |
+
+### Nuke 17+ (gated)
+
+| Tool | Description |
+|---|---|
+| `create_splat_reader` | Gaussian splat reader |
+| `create_annotation` | Create annotation/sticky note |
+| `list_annotations` | List all annotations |
+
+</details>
 
 ## Architecture
 
@@ -94,16 +173,16 @@ MCP Server (src/nukemcp/)
     │ TCP socket (JSON)
     ▼
 Nuke Addon (nuke_addon/)
-    │ nuke.executeInMainThread()
+    │ executeInMainThread (GUI) / queue dispatch (headless)
     ▼
 Nuke's Python Environment
 ```
 
 Three layers, each with a clear job:
 
-1. **Nuke Addon** — runs inside Nuke, executes commands in the main thread, reports version/variant
-2. **MCP Server** — FastMCP 2.14.x, tool annotations, version gating, mock mode for offline dev
-3. **AI Guidance** — `CLAUDE.md` defines behavior rules: naming conventions, confirmation requirements, graph organization
+1. **Nuke Addon** — runs inside Nuke, executes commands thread-safely, reports version/variant. Supports both GUI mode (executeInMainThread) and headless mode (queue-based dispatch).
+2. **MCP Server** — FastMCP 2.14.x, tool annotations, version gating, mock mode for offline dev, auto-discovery and headless launch.
+3. **AI Guidance** — `CLAUDE.md` defines behavior rules: naming conventions, confirmation requirements, graph organization.
 
 ## Offline Development
 
@@ -123,9 +202,9 @@ The addon reports its Nuke version and variant on connection. Tools that require
 
 | Variant | Available |
 |---|---|
-| Nuke | Core tools (graph, script, comp, render) |
+| Nuke | Core tools (graph, script, comp, render, batch, templates) |
 | NukeX | + Tracking, 3D, Deep, CopyCat/BigCat |
-| Nuke 17+ | + Gaussian Splats, USD Geo, Annotations |
+| Nuke 17+ | + Gaussian Splats, Annotations |
 
 ## Roadmap
 

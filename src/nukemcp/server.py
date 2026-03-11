@@ -12,8 +12,8 @@ import sys
 from fastmcp import FastMCP
 
 from nukemcp.connection import NukeConnection, DEFAULT_HOST, DEFAULT_PORT
-from nukemcp.version import parse_version, NukeVersion
-from nukemcp.tools import graph, script
+from nukemcp.version import NukeVersion, parse_version
+from nukemcp.tools import graph, script, comp, render, templates, batch, tracking, threed, deep, ml, splats, annotations
 
 log = logging.getLogger("nukemcp")
 
@@ -31,6 +31,7 @@ class NukeMCPServer:
         self.mcp = mcp
         self.connection = connection
         self.version = version
+        self.event_log = None  # Set by events.register()
         self._mock_server = mock_server
 
 
@@ -82,6 +83,24 @@ def build_server(
     # Register tool modules
     graph.register(server)
     script.register(server)
+    comp.register(server)
+    render.register(server)
+    templates.register(server)
+    batch.register(server)
+    tracking.register(server)
+    threed.register(server)
+    deep.register(server)
+    ml.register(server)
+    splats.register(server)
+    annotations.register(server)
+
+    # Register non-tool modules (memory, rag, events, resources, prompts)
+    from nukemcp import memory, rag, events, resources, prompts
+    memory.register(server)
+    rag.register(server)
+    events.register(server)
+    resources.register(server)
+    prompts.register(server)
 
     return mcp
 
@@ -93,6 +112,9 @@ def main():
     parser.add_argument("--mock", action="store_true", help="Use mock Nuke socket for offline development")
     parser.add_argument("--mock-version", default="17.0v1", help="Mock Nuke version (default: 17.0v1)")
     parser.add_argument("--mock-variant", default="NukeX", help="Mock Nuke variant (default: NukeX)")
+    parser.add_argument("--discover", action="store_true", help="Find Nuke installations and exit")
+    parser.add_argument("--headless", action="store_true", help="Launch Nuke in headless mode before connecting")
+    parser.add_argument("--nuke-path", help="Path to Nuke executable (for --headless)")
     parser.add_argument("--debug", action="store_true", help="Enable debug logging")
     args = parser.parse_args()
 
@@ -101,6 +123,26 @@ def main():
         format="%(name)s %(levelname)s: %(message)s",
         stream=sys.stderr,
     )
+
+    if args.discover:
+        from nukemcp.discovery import discover_nuke
+        result = discover_nuke(extra_paths=[args.nuke_path] if args.nuke_path else None)
+        print(result.summary(), file=sys.stderr)
+        sys.exit(0 if result.has_nuke else 1)
+
+    nuke_proc = None
+    if args.headless:
+        from nukemcp.discovery import discover_nuke, launch_headless
+        nuke_path = args.nuke_path
+        if not nuke_path:
+            result = discover_nuke()
+            if not result.has_nuke:
+                log.error("Cannot launch headless: %s", result.summary())
+                sys.exit(1)
+            nuke_path = str(result.best.executable)
+            log.info("Auto-discovered: %s", result.best)
+        nuke_proc = launch_headless(nuke_path, port=args.port)
+        log.info("Headless Nuke running (PID %d)", nuke_proc.pid)
 
     mcp = build_server(
         host=args.host,

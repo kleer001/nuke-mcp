@@ -1,5 +1,7 @@
 """Tests for version detection and gating."""
 
+import pytest
+
 from nukemcp.version import parse_version, NukeVersion
 
 
@@ -20,9 +22,13 @@ def test_parse_older_version():
 
 
 def test_parse_malformed_version():
-    v = parse_version({"nuke_version": "garbage", "variant": "Nuke"})
-    assert v.major == 0
-    assert v.minor == 0
+    with pytest.raises(ValueError, match="Could not parse"):
+        parse_version({"nuke_version": "garbage", "variant": "Nuke"})
+
+
+def test_parse_missing_version():
+    with pytest.raises(ValueError, match="missing"):
+        parse_version({"variant": "Nuke"})
 
 
 def test_is_nukex():

@@ -1,9 +1,9 @@
 """Socket connection to the Nuke addon."""
 
 import json
+import logging
 import socket
 import time
-import logging
 
 log = logging.getLogger(__name__)
 
@@ -82,6 +82,13 @@ class NukeConnection:
         except (OSError, json.JSONDecodeError, TimeoutError) as e:
             self._close_socket()
             raise NukeConnectionError(f"Communication error: {e}") from e
+
+    def send_command(self, cmd_type: str, params: dict | None = None, timeout: float = 10.0) -> dict:
+        """Send a command and return the result, raising on error."""
+        response = self.send({"type": cmd_type, "params": params or {}}, timeout=timeout)
+        if response["status"] == "error":
+            raise RuntimeError(response["error"])
+        return response["result"]
 
     def disconnect(self):
         """Cleanly disconnect from the Nuke addon."""

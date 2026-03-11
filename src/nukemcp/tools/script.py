@@ -12,9 +12,7 @@ def register(server: NukeMCPServer):
     mcp = server.mcp
     conn = server.connection
 
-    @mcp.tool(
-        annotations={"destructiveHint": True},
-    )
+    @mcp.tool(annotations={"destructiveHint": True})
     def load_script(path: str, confirm: bool = False) -> dict:
         """Open a Nuke script file, replacing the current script.
 
@@ -35,15 +33,9 @@ def register(server: NukeMCPServer):
                     "Ask the user to confirm, then call again with confirm=True."
                 ),
             }
+        return conn.send_command("load_script", {"path": path})
 
-        response = conn.send({"type": "load_script", "params": {"path": path}})
-        if response["status"] == "error":
-            raise RuntimeError(response["error"])
-        return response["result"]
-
-    @mcp.tool(
-        annotations={"destructiveHint": True},
-    )
+    @mcp.tool(annotations={"destructiveHint": True})
     def save_script(path: str | None = None, confirm: bool = False) -> dict:
         """Save the current Nuke script.
 
@@ -63,19 +55,12 @@ def register(server: NukeMCPServer):
                     "Ask the user to confirm, then call again with confirm=True."
                 ),
             }
-
         params = {}
         if path is not None:
             params["path"] = path
+        return conn.send_command("save_script", params)
 
-        response = conn.send({"type": "save_script", "params": params})
-        if response["status"] == "error":
-            raise RuntimeError(response["error"])
-        return response["result"]
-
-    @mcp.tool(
-        annotations={"idempotentHint": True},
-    )
+    @mcp.tool(annotations={"idempotentHint": True})
     def set_project_settings(
         fps: float | None = None,
         colorspace: str | None = None,
@@ -95,15 +80,9 @@ def register(server: NukeMCPServer):
             params["colorspace"] = colorspace
         if resolution is not None:
             params["resolution"] = resolution
+        return conn.send_command("set_project_settings", params)
 
-        response = conn.send({"type": "set_project_settings", "params": params})
-        if response["status"] == "error":
-            raise RuntimeError(response["error"])
-        return response["result"]
-
-    @mcp.tool(
-        annotations={"idempotentHint": True},
-    )
+    @mcp.tool(annotations={"idempotentHint": True})
     def set_frame_range(first: int, last: int) -> dict:
         """Set the script's frame range.
 
@@ -111,10 +90,4 @@ def register(server: NukeMCPServer):
             first: First frame number.
             last: Last frame number.
         """
-        response = conn.send({
-            "type": "set_frame_range",
-            "params": {"first": first, "last": last},
-        })
-        if response["status"] == "error":
-            raise RuntimeError(response["error"])
-        return response["result"]
+        return conn.send_command("set_frame_range", {"first": first, "last": last})

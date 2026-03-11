@@ -23,6 +23,9 @@ class MockNukeState:
         self.resolution = [1920, 1080]
         self.script_name = "untitled.nk"
         self._next_id = 1
+        self._proxy_mode = False
+        self._toolsets: dict[str, list[str]] = {}
+        self._subscribed_events: list[str] = []
 
     def handshake(self) -> dict:
         return {
@@ -38,10 +41,7 @@ class MockNukeState:
         handler = getattr(self, f"_cmd_{cmd_type}", None)
         if not handler:
             return {"status": "error", "error": f"Unknown command: {cmd_type}"}
-        try:
-            return handler(params)
-        except Exception as e:
-            return {"status": "error", "error": f"{type(e).__name__}: {e}"}
+        return handler(params)
 
     def _cmd_ping(self, params: dict) -> dict:
         return {"status": "ok", "result": "pong"}
@@ -214,6 +214,182 @@ class MockNukeState:
             "status": "ok",
             "result": {"first_frame": self.frame_range[0], "last_frame": self.frame_range[1]},
         }
+
+    def _cmd_render_frames(self, params: dict) -> dict:
+        write_node = params["write_node"]
+        if write_node not in self.nodes:
+            return {"status": "error", "error": f"Node '{write_node}' not found"}
+        first = params.get("first_frame", self.frame_range[0])
+        last = params.get("last_frame", self.frame_range[1])
+        return {
+            "status": "ok",
+            "result": {"rendered": write_node, "first_frame": first, "last_frame": last},
+        }
+
+    def _cmd_set_proxy_mode(self, params: dict) -> dict:
+        enabled = params["enabled"]
+        self._proxy_mode = enabled
+        return {"status": "ok", "result": {"proxy_mode": enabled}}
+
+    def _cmd_find_nodes_by_type(self, params: dict) -> dict:
+        node_class = params["node_class"]
+        if node_class == "*":
+            matches = [
+                {"name": n, "class": d["class"]} for n, d in self.nodes.items()
+            ]
+        else:
+            matches = [
+                {"name": n, "class": d["class"]}
+                for n, d in self.nodes.items()
+                if d["class"] == node_class
+            ]
+        return {"status": "ok", "result": {"nodes": matches}}
+
+    def _cmd_find_broken_reads(self, params: dict) -> dict:
+        broken = []
+        for name, data in self.nodes.items():
+            if data["class"] == "Read":
+                file_path = data.get("knobs", {}).get("file", "")
+                if not file_path or file_path.startswith("/nonexistent"):
+                    broken.append({"name": name, "file": file_path})
+        return {"status": "ok", "result": {"broken_reads": broken}}
+
+    def _cmd_find_error_nodes(self, params: dict) -> dict:
+        # In mock, no nodes have errors unless explicitly set
+        errors = []
+        for name, data in self.nodes.items():
+            if data.get("knobs", {}).get("_error"):
+                errors.append({"name": name, "error": data["knobs"]["_error"]})
+        return {"status": "ok", "result": {"nodes": errors}}
+
+    def _cmd_batch_set_knob(self, params: dict) -> dict:
+        node_names = params["node_names"]
+        knob_name = params["knob_name"]
+        value = params["value"]
+        modified = []
+        for name in node_names:
+            node = self.nodes.get(name)
+            if node:
+                node.setdefault("knobs", {})[knob_name] = value
+                modified.append(name)
+        return {"status": "ok", "result": {"modified": modified, "knob": knob_name}}
+
+    def _cmd_batch_reconnect(self, params: dict) -> dict:
+        node_names = params["node_names"]
+        new_input = params["new_input"]
+        input_index = params.get("input_index", 0)
+        if new_input not in self.nodes:
+            return {"status": "error", "error": f"Node '{new_input}' not found"}
+        reconnected = []
+        for name in node_names:
+            if name in self.nodes:
+                # Remove old connections at this index
+                self.connections = [
+                    c for c in self.connections
+                    if not (c["input"] == name and c["input_index"] == input_index)
+                ]
+                self.connections.append({
+                    "output": new_input, "input": name, "input_index": input_index,
+                })
+                reconnected.append(name)
+        return {"status": "ok", "result": {"reconnected": reconnected}}
+
+    def _cmd_list_toolsets(self, params: dict) -> dict:
+        return {"status": "ok", "result": {"toolsets": list(self._toolsets.keys())}}
+
+    def _cmd_load_toolset(self, params: dict) -> dict:
+        name = params["name"]
+        if name not in self._toolsets:
+            return {"status": "error", "error": f"Toolset '{name}' not found"}
+        return {"status": "ok", "result": {"loaded": name}}
+
+    def _cmd_save_toolset(self, params: dict) -> dict:
+        name = params["name"]
+        node_names = params["node_names"]
+        self._toolsets[name] = node_names
+        return {"status": "ok", "result": {"saved": name, "nodes": node_names}}
+
+    def _cmd_create_live_group(self, params: dict) -> dict:
+        name = params["name"]
+        node_names = params["node_names"]
+        # Create a LiveGroup node in the state
+        self.nodes[name] = {
+            "class": "LiveGroup",
+            "xpos": 0, "ypos": 0,
+            "knobs": {"contained_nodes": node_names},
+        }
+        return {"status": "ok", "result": {"name": name, "nodes": node_names}}
+
+    def _cmd_create_tracker(self, params: dict) -> dict:
+        source = params["source_node"]
+        name = params.get("name", "tracker")
+        if source not in self.nodes:
+            return {"status": "error", "error": f"Node '{source}' not found"}
+        self.nodes[name] = {"class": "Tracker4", "xpos": 0, "ypos": 0, "knobs": {}}
+        self.connections.append({"output": source, "input": name, "input_index": 0})
+        return {"status": "ok", "result": {"name": name, "class": "Tracker4", "source": source}}
+
+    def _cmd_solve_tracker(self, params: dict) -> dict:
+        tracker = params["tracker_node"]
+        if tracker not in self.nodes:
+            return {"status": "error", "error": f"Node '{tracker}' not found"}
+        first = params.get("first_frame", self.frame_range[0])
+        last = params.get("last_frame", self.frame_range[1])
+        return {"status": "ok", "result": {"solved": tracker, "frames": [first, last]}}
+
+    def _cmd_setup_stabilize(self, params: dict) -> dict:
+        source = params["source_node"]
+        tracker = params["tracker_node"]
+        if source not in self.nodes:
+            return {"status": "error", "error": f"Node '{source}' not found"}
+        if tracker not in self.nodes:
+            return {"status": "error", "error": f"Node '{tracker}' not found"}
+        # Real addon sets the existing Tracker4 to stabilize mode
+        self.nodes[tracker].setdefault("knobs", {})["transform"] = "stabilize"
+        return {"status": "ok", "result": {"name": tracker, "source": source, "tracker": tracker}}
+
+    def _cmd_create_camera_tracker(self, params: dict) -> dict:
+        source = params["source_node"]
+        name = params.get("name", "camera_tracker")
+        if source not in self.nodes:
+            return {"status": "error", "error": f"Node '{source}' not found"}
+        self.nodes[name] = {"class": "CameraTracker", "xpos": 0, "ypos": 0, "knobs": {}}
+        self.connections.append({"output": source, "input": name, "input_index": 0})
+        return {"status": "ok", "result": {"name": name, "class": "CameraTracker", "source": source}}
+
+    def _cmd_train_copycat(self, params: dict) -> dict:
+        node = params["copycat_node"]
+        epochs = params.get("epochs", 1000)
+        if node not in self.nodes:
+            return {"status": "error", "error": f"Node '{node}' not found"}
+        return {"status": "ok", "result": {"trained": node, "epochs": epochs}}
+
+    def _cmd_create_annotation(self, params: dict) -> dict:
+        text = params["text"]
+        name = params.get("name", "annotation")
+        position = params.get("position", [0, 0])
+        color = params.get("color", [1.0, 1.0, 0.5])
+        self.nodes[name] = {
+            "class": "StickyNote",
+            "xpos": position[0], "ypos": position[1],
+            "knobs": {"label": text, "note_font_color": color},
+        }
+        return {"status": "ok", "result": {"name": name, "text": text}}
+
+    def _cmd_list_annotations(self, params: dict) -> dict:
+        annotations = []
+        for name, data in self.nodes.items():
+            if data["class"] == "StickyNote":
+                annotations.append({
+                    "name": name,
+                    "text": data.get("knobs", {}).get("label", ""),
+                })
+        return {"status": "ok", "result": {"annotations": annotations}}
+
+    def _cmd_subscribe_events(self, params: dict) -> dict:
+        event_types = params.get("event_types", [])
+        self._subscribed_events = event_types
+        return {"status": "ok", "result": {"subscribed": event_types}}
 
 
 class MockNukeServer:

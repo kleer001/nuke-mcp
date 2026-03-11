@@ -2,8 +2,8 @@
 
 from __future__ import annotations
 
-import re
 import logging
+import re
 from dataclasses import dataclass
 
 log = logging.getLogger(__name__)
@@ -37,13 +37,14 @@ def parse_version(handshake: dict) -> NukeVersion:
     Expected handshake format:
         {"nuke_version": "17.0v1", "variant": "NukeX", ...}
     """
-    version_str = handshake.get("nuke_version", "0.0v0")
+    version_str = handshake.get("nuke_version")
+    if not version_str:
+        raise ValueError("Handshake missing 'nuke_version'")
     variant = handshake.get("variant", "Nuke")
 
     match = re.match(r"(\d+)\.(\d+)(v\d+)?", version_str)
     if not match:
-        log.warning("Could not parse Nuke version string: %s", version_str)
-        return NukeVersion(0, 0, "v0", variant)
+        raise ValueError(f"Could not parse Nuke version string: {version_str!r}")
 
     return NukeVersion(
         major=int(match.group(1)),
