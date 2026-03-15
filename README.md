@@ -6,7 +6,7 @@ NukeMCP connects AI assistants (Claude, ChatGPT, local LLMs) to a running Nuke s
 
 ## Status
 
-**Phase 1 — Foundation.** Core tools verified end-to-end against Nuke 17.0v1. Memory, production comp workflows, and advanced NukeX tools are on the [roadmap](nuke_mcp_roadmap.md).
+**Production-ready.** 66 tools/resources/prompts, verified end-to-end against Nuke 17.0v1. Full test suite with 123+ mock tests and CI with lint + coverage. See the [roadmap](ROADMAP.md) for what's next.
 
 ## Requirements
 
@@ -34,6 +34,14 @@ uv run nuke-mcp --headless
 
 # Run tests
 uv run pytest -v
+```
+
+## Install from PyPI
+
+```bash
+pip install nuke-mcp
+# or
+uvx nuke-mcp --mock
 ```
 
 ## Nuke Addon Setup
@@ -93,6 +101,25 @@ Add to your Claude Desktop config (`~/Library/Application Support/Claude/claude_
 }
 ```
 
+### ChatGPT / Other MCP Clients
+
+Wrap the stdio server with an HTTP bridge. Any MCP-compatible client that supports stdio transport will work:
+
+```json
+{
+  "mcpServers": {
+    "nuke-mcp": {
+      "command": "nuke-mcp",
+      "args": []
+    }
+  }
+}
+```
+
+### Local LLMs (Ollama, LM Studio, etc.)
+
+Use an MCP-compatible client or framework that supports stdio transport. The server doesn't require any specific AI provider — it speaks standard MCP.
+
 ## Available Tools
 
 13 core tools available on all Nuke variants, plus gated tools for NukeX and Nuke 17+. Destructive tools require user confirmation — enforced at the code level, not just in the AI's instructions.
@@ -147,19 +174,39 @@ Add to your Claude Desktop config (`~/Library/Application Support/Claude/claude_
 | `solve_tracker` | Execute tracking |
 | `setup_stabilize` | Set tracker to stabilize mode |
 | `create_camera_tracker` | Create a CameraTracker node |
-| `create_3d_camera` | Create a 3D camera |
-| `create_3d_light` | Create a 3D light |
-| `create_deep_merge` | Deep compositing merge |
-| `create_deep_recolor` | Deep recolor node |
-| `create_copycat` | CopyCat ML training node |
+| `create_3d_scene` | Create a Scene node |
+| `setup_camera` | Create a Camera3 node |
+| `setup_scanline_render` | ScanlineRender with scene + camera |
+| `setup_projection` | Camera projection workflow |
+| `setup_deep_pipeline` | Deep compositing pipeline |
+| `setup_deep_merge` | Deep merge |
+| `convert_to_deep` | Flat to deep conversion |
+| `setup_copycat` | CopyCat ML training node |
+| `train_copycat` | Train a CopyCat model |
 
 ### Nuke 17+ (gated)
 
 | Tool | Description |
 |---|---|
-| `create_splat_reader` | Gaussian splat reader |
+| `import_splat` | Gaussian splat reader |
+| `setup_splat_render` | Splat render with camera |
+| `setup_bigcat` | BigCat ML training (NukeX + 17+) |
 | `create_annotation` | Create annotation/sticky note |
 | `list_annotations` | List all annotations |
+
+### Memory & Events
+
+| Tool | Description |
+|---|---|
+| `read_memory` | Read persistent memory files |
+| `write_memory` | Write persistent memory |
+| `log_correction` | Log a compositor correction |
+| `list_memory` | List all memory files |
+| `update_project_memory` | Snapshot current script settings |
+| `subscribe_events` | Subscribe to real-time scene events |
+| `get_events` | Get recent events |
+| `clear_events` | Clear event log |
+| `search_nuke_docs` | BM25 search over Nuke docs |
 
 </details>
 
@@ -180,9 +227,47 @@ Nuke's Python Environment
 
 Three layers, each with a clear job:
 
-1. **Nuke Addon** — runs inside Nuke, executes commands thread-safely, reports version/variant. Supports both GUI mode (executeInMainThread) and headless mode (queue-based dispatch).
-2. **MCP Server** — FastMCP 2.14.x, tool annotations, version gating, mock mode for offline dev, auto-discovery and headless launch.
-3. **AI Guidance** — `CLAUDE.md` defines behavior rules: naming conventions, confirmation requirements, graph organization.
+1. **Nuke Addon** — runs inside Nuke, executes commands thread-safely, pushes real-time events via Nuke callbacks. Supports both GUI mode (executeInMainThread) and headless mode (queue-based dispatch).
+2. **MCP Server** — FastMCP 2.14.x, tool annotations, version gating, mock mode for offline dev, auto-discovery, headless launch, plugin system, persistent memory.
+3. **AI Guidance** — `CLAUDE.md` defines behavior rules: naming conventions, confirmation requirements, graph organization, memory usage.
+
+## Bidirectional Events
+
+The addon pushes real-time scene change events to the MCP server when subscribed:
+
+- `node_created` / `node_deleted` — track graph changes
+- `knob_changed` — parameter modifications
+- `script_loaded` / `script_saved` — file operations
+
+Subscribe via `subscribe_events()`, retrieve with `get_events()`.
+
+## Memory System
+
+NukeMCP maintains persistent memory across sessions:
+
+- **`memory/facility.md`** — studio conventions (colorspace, naming, paths, preferred tools)
+- **`memory/project/`** — auto-populated script snapshots
+- **`memory/corrections.md`** — logged corrections from the compositor
+
+Memory is exposed as MCP Resources (`nuke://memory/facility`, `nuke://memory/corrections`) for automatic context at session start.
+
+## Plugin System
+
+Extend NukeMCP without forking — drop Python files into `plugins/`:
+
+```python
+# plugins/my_studio_tools.py
+def register(server):
+    mcp = server.mcp
+    conn = server.connection
+
+    @mcp.tool()
+    def my_custom_tool(node_name: str) -> dict:
+        """Studio-specific tool."""
+        return conn.send_command("get_node_info", {"node_name": node_name})
+```
+
+See `plugins/README.md` for details.
 
 ## Offline Development
 
@@ -203,21 +288,16 @@ The addon reports its Nuke version and variant on connection. Tools that require
 | Variant | Available |
 |---|---|
 | Nuke | Core tools (graph, script, comp, render, batch, templates) |
-| NukeX | + Tracking, 3D, Deep, CopyCat/BigCat |
-| Nuke 17+ | + Gaussian Splats, Annotations |
+| NukeX | + Tracking, 3D, Deep, CopyCat |
+| Nuke 17+ | + Gaussian Splats, BigCat, Annotations |
 
-## Roadmap
+## Contributing
 
-See [nuke_mcp_roadmap.md](nuke_mcp_roadmap.md) for the full vision and phased plan. See [IMPLEMENTATION.md](IMPLEMENTATION.md) for the concrete build steps.
+See [CONTRIBUTING.md](CONTRIBUTING.md) for how to add tools, write tests, and follow the codebase patterns.
 
-**Phases:**
-1. Foundation (current)
-2. Memory & Learning
-3. Production Tooling
-4. Advanced Features (NukeX / Nuke 17)
-5. Documentation Grounding (RAG)
-6. Bidirectional Events
-7. Ecosystem & Community
+## Best Practices
+
+See [BEST_PRACTICES.md](BEST_PRACTICES.md) for a compositor-focused guide to using NukeMCP effectively.
 
 ## Acknowledgments
 

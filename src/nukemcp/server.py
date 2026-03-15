@@ -102,6 +102,30 @@ def build_server(
     resources.register(server)
     prompts.register(server)
 
+    # Load facility plugins
+    from nukemcp.plugins import load_plugins
+    load_plugins(server)
+
+    # Auto-populate project memory on connection
+    try:
+        info = conn.send_command("get_script_info")
+        script_name = info.get("name", "untitled")
+        # Derive a clean project name from the script filename
+        project_name = script_name.rsplit("/", 1)[-1].rsplit(".", 1)[0] or "untitled"
+        memory.write_file(
+            f"project/{project_name}.md",
+            f"# {project_name}\n\n"
+            f"- **Script:** {info.get('name', 'unknown')}\n"
+            f"- **Frame Range:** {info.get('frame_range', [0, 0])}\n"
+            f"- **FPS:** {info.get('fps', 24)}\n"
+            f"- **Colorspace:** {info.get('colorspace', 'unknown')}\n"
+            f"- **Format:** {info.get('format', 'unknown')}\n"
+            f"- **Node Count:** {info.get('node_count', 0)}\n",
+        )
+        log.info("Auto-populated project memory: project/%s.md", project_name)
+    except Exception:
+        log.debug("Skipped project memory auto-population", exc_info=True)
+
     return mcp
 
 

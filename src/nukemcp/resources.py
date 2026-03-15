@@ -1,4 +1,4 @@
-"""MCP Resources — expose read-only scene state as contextual data for the AI."""
+"""MCP Resources — expose read-only scene state and memory as contextual data for the AI."""
 
 from __future__ import annotations
 
@@ -44,3 +44,18 @@ def register(server: NukeMCPServer):
             lines = [f"- {n['name']}: {n.get('error', 'unknown error')}" for n in r["nodes"]]
             return f"Error nodes ({len(r['nodes'])}):\n" + "\n".join(lines)
         return str(r)
+
+    # Memory resources — expose persistent memory at session start
+    from nukemcp.memory import read_file
+
+    @mcp.resource("nuke://memory/facility")
+    def facility_memory() -> str:
+        """Facility conventions and preferences loaded from memory/facility.md."""
+        content = read_file("facility.md")
+        return content or "No facility conventions set. Edit memory/facility.md to configure."
+
+    @mcp.resource("nuke://memory/corrections")
+    def corrections_memory() -> str:
+        """Past corrections logged by the compositor across sessions."""
+        content = read_file("corrections.md")
+        return content or "No corrections logged yet."

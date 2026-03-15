@@ -407,6 +407,23 @@ class MockNukeServer:
         self._running = False
         self._thread: threading.Thread | None = None
         self._ready = threading.Event()
+        self._client_socket: socket.socket | None = None
+        self._client_lock = threading.Lock()
+
+    def push_event(self, event_type: str, data: dict):
+        """Push an event to the connected client (for testing).
+
+        Simulates what the real Nuke addon does when a callback fires.
+        """
+        if self._client_socket is None:
+            return
+        event = {"type": "event", "event_type": event_type, "data": data}
+        msg = json.dumps(event) + "\n"
+        with self._client_lock:
+            try:
+                self._client_socket.sendall(msg.encode("utf-8"))
+            except OSError:
+                pass
 
     def start(self):
         if self._running:
@@ -445,6 +462,8 @@ class MockNukeServer:
 
     def _handle_client(self, client: socket.socket):
         client.settimeout(None)
+        self._client_socket = client
+
         # Send handshake
         self._send(client, self.state.handshake())
 
@@ -468,6 +487,7 @@ class MockNukeServer:
                 response = self.state.handle(command)
                 self._send(client, response)
 
+        self._client_socket = None
         try:
             client.close()
         except OSError:
@@ -475,7 +495,8 @@ class MockNukeServer:
 
     def _send(self, client: socket.socket, data: dict):
         msg = json.dumps(data) + "\n"
-        try:
-            client.sendall(msg.encode("utf-8"))
-        except OSError:
-            pass
+        with self._client_lock:
+            try:
+                client.sendall(msg.encode("utf-8"))
+            except OSError:
+                pass

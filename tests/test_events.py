@@ -61,3 +61,31 @@ def test_subscribe_events_mock(connection):
     })
     assert response["status"] == "ok"
     assert "node_created" in response["result"]["subscribed"]
+
+
+def test_event_push_received(mock_server, mock_port):
+    """Test that pushed events are received by the connection's event handler."""
+    import time
+    from nukemcp.connection import NukeConnection
+
+    received = []
+
+    conn = NukeConnection("127.0.0.1", mock_port)
+    conn.set_event_handler(lambda msg: received.append(msg))
+    conn.connect()
+
+    # Push an event from the mock server
+    mock_server.push_event("node_created", {"name": "Grade1", "class": "Grade"})
+
+    # Give the reader thread time to process
+    for _ in range(50):
+        if received:
+            break
+        time.sleep(0.02)
+
+    assert len(received) == 1
+    assert received[0]["type"] == "event"
+    assert received[0]["event_type"] == "node_created"
+    assert received[0]["data"]["name"] == "Grade1"
+
+    conn.disconnect()

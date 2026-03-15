@@ -1,7 +1,6 @@
 """Tests for persistent memory tools."""
 
 import shutil
-from pathlib import Path
 
 import pytest
 

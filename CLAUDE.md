@@ -51,6 +51,13 @@ Use descriptive, lowercase names with underscores:
 - Never change colorspace settings without asking
 - When creating Read nodes, mention the expected colorspace if relevant
 
+## Memory
+
+- On session start, read `nuke://memory/facility` and `nuke://memory/corrections` resources for context
+- After any correction by the compositor, call `log_correction` to persist it for future sessions
+- Periodically call `update_project_memory` to keep the project snapshot current
+- If facility conventions exist, follow them (colorspace, naming, preferred tools)
+
 ## When Uncertain
 
 - Ask the user rather than guessing

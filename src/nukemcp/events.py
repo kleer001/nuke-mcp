@@ -55,11 +55,16 @@ def register(server: NukeMCPServer):
     event_log = EventLog()
     server.event_log = event_log
 
+    # Wire up the connection's event handler to populate the EventLog
+    conn.set_event_handler(lambda msg: event_log.add(msg))
+
     @mcp.tool()
     def subscribe_events(event_types: list[str] | None = None) -> dict:
         """Subscribe to Nuke scene change events.
 
         Once subscribed, events are logged and can be retrieved with get_events.
+        The addon will push events in real time for: node_created, node_deleted,
+        knob_changed, script_loaded, script_saved.
 
         Args:
             event_types: List of event types to subscribe to. Pass None for all.

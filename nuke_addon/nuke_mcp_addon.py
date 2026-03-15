@@ -545,10 +545,82 @@ def _handle_list_annotations(params: dict) -> dict:
 
 
 
+_event_client_socket = None
+_event_socket_lock = threading.Lock()
+_registered_callbacks = set()
+
+
+def _push_event(event_type: str, data: dict):
+    """Push an event to the connected MCP client."""
+    if _event_client_socket is None:
+        return
+    event = {"type": "event", "event_type": event_type, "data": data}
+    msg = json.dumps(event) + "\n"
+    with _event_socket_lock:
+        try:
+            _event_client_socket.sendall(msg.encode("utf-8"))
+        except OSError:
+            pass
+
+
+def _on_node_created():
+    nuke = _get_nuke()
+    node = nuke.thisNode()
+    _push_event("node_created", {"name": node.name(), "class": node.Class()})
+
+
+def _on_node_destroyed():
+    nuke = _get_nuke()
+    node = nuke.thisNode()
+    _push_event("node_deleted", {"name": node.name(), "class": node.Class()})
+
+
+def _on_knob_changed():
+    nuke = _get_nuke()
+    node = nuke.thisNode()
+    knob = nuke.thisKnob()
+    if knob:
+        _push_event("knob_changed", {
+            "node": node.name(),
+            "knob": knob.name(),
+        })
+
+
+def _on_script_loaded():
+    _push_event("script_loaded", {})
+
+
+def _on_script_saved():
+    _push_event("script_saved", {})
+
+
 def _handle_subscribe_events(params: dict) -> dict:
+    global _registered_callbacks
     event_types = params.get("event_types", [])
-    # In a full implementation this would register nuke callbacks.
-    # For now we acknowledge the subscription.
+
+    try:
+        nuke = _get_nuke()
+
+        for et in event_types:
+            if et in _registered_callbacks:
+                continue
+            if et == "node_created":
+                nuke.addOnCreate(_on_node_created)
+            elif et == "node_deleted":
+                nuke.addOnDestroy(_on_node_destroyed)
+            elif et == "knob_changed":
+                nuke.addKnobChanged(_on_knob_changed)
+            elif et == "script_loaded":
+                nuke.addOnScriptLoad(_on_script_loaded)
+            elif et == "script_saved":
+                nuke.addOnScriptSave(_on_script_saved)
+            else:
+                continue
+            _registered_callbacks.add(et)
+    except Exception:
+        # Nuke not available (headless without callbacks) — acknowledge anyway
+        pass
+
     return {"status": "ok", "result": {"subscribed": event_types}}
 
 
@@ -697,7 +769,9 @@ class NukeMCPServer:
         return func(*args)
 
     def _handle_client(self, client: socket.socket):
+        global _event_client_socket
         client.settimeout(None)
+        _event_client_socket = client
 
         # Send handshake
         handshake = self._run_in_nuke(_handshake_data)
@@ -743,6 +817,7 @@ class NukeMCPServer:
                 self._send(client, response)
                 self._emit_log(f"-> {response.get('status', '?')}")
 
+        _event_client_socket = None
         try:
             client.close()
         except OSError:

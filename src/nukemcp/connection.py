@@ -2,7 +2,9 @@
 
 import json
 import logging
+import queue
 import socket
+import threading
 import time
 
 log = logging.getLogger(__name__)
@@ -20,7 +22,8 @@ class NukeConnection:
     """Manages a TCP socket connection to the Nuke addon running inside Nuke.
 
     On connect, reads a handshake message containing Nuke version and variant info.
-    Sends JSON commands and receives JSON responses.
+    Sends JSON commands and receives JSON responses. Supports receiving asynchronous
+    event messages pushed by the addon.
     """
 
     def __init__(self, host: str = DEFAULT_HOST, port: int = DEFAULT_PORT):
@@ -29,6 +32,17 @@ class NukeConnection:
         self.sock: socket.socket | None = None
         self.handshake: dict | None = None
         self._buffer = b""
+        self._response_queue: queue.Queue[dict] = queue.Queue()
+        self._event_handler: callable | None = None
+        self._reader_thread: threading.Thread | None = None
+        self._reader_running = False
+
+    def set_event_handler(self, handler):
+        """Set a callback for event messages pushed by the addon.
+
+        The handler receives a dict with keys: type, event_type, data.
+        """
+        self._event_handler = handler
 
     def connect(self, retries: int = 3, base_delay: float = 1.0) -> dict:
         """Connect to the Nuke addon and return the handshake data.
@@ -50,6 +64,9 @@ class NukeConnection:
                     self.host,
                     self.port,
                 )
+                # Switch to blocking mode and start the reader thread
+                self.sock.settimeout(None)
+                self._start_reader()
                 return self.handshake
             except (OSError, json.JSONDecodeError, TimeoutError) as e:
                 last_error = e
@@ -76,12 +93,17 @@ class NukeConnection:
 
         msg = json.dumps(command) + "\n"
         try:
-            self.sock.settimeout(timeout)
             self.sock.sendall(msg.encode("utf-8"))
-            return self._read_message()
-        except (OSError, json.JSONDecodeError, TimeoutError) as e:
+        except OSError as e:
             self._close_socket()
             raise NukeConnectionError(f"Communication error: {e}") from e
+
+        try:
+            return self._response_queue.get(timeout=timeout)
+        except queue.Empty:
+            raise NukeConnectionError(
+                f"Timeout waiting for response after {timeout}s"
+            ) from None
 
     def send_command(self, cmd_type: str, params: dict | None = None, timeout: float = 10.0) -> dict:
         """Send a command and return the result, raising on error."""
@@ -92,6 +114,7 @@ class NukeConnection:
 
     def disconnect(self):
         """Cleanly disconnect from the Nuke addon."""
+        self._stop_reader()
         self._close_socket()
         self.handshake = None
         log.info("Disconnected from Nuke addon")
@@ -99,6 +122,35 @@ class NukeConnection:
     @property
     def is_connected(self) -> bool:
         return self.sock is not None
+
+    def _start_reader(self):
+        """Start the background thread that reads all incoming messages."""
+        self._reader_running = True
+        self._reader_thread = threading.Thread(target=self._reader_loop, daemon=True)
+        self._reader_thread.start()
+
+    def _stop_reader(self):
+        """Stop the reader thread."""
+        self._reader_running = False
+        if self._reader_thread and self._reader_thread.is_alive():
+            self._reader_thread.join(timeout=2.0)
+        self._reader_thread = None
+
+    def _reader_loop(self):
+        """Background loop: read messages and route events vs responses."""
+        while self._reader_running:
+            try:
+                msg = self._read_message()
+            except (NukeConnectionError, OSError):
+                break
+            if msg.get("type") == "event":
+                if self._event_handler:
+                    try:
+                        self._event_handler(msg)
+                    except Exception:
+                        log.exception("Event handler error")
+            else:
+                self._response_queue.put(msg)
 
     def _read_message(self) -> dict:
         """Read a newline-delimited JSON message from the socket."""

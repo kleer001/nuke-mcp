@@ -8,7 +8,6 @@ from nukemcp.discovery import (
     DiscoveryResult,
     LicenseInfo,
     NukeInstall,
-    _detect_breadcrumbs,
     _detect_trial_tokens,
     _make_install,
     _parse_jwt_payload,
@@ -126,7 +125,8 @@ def test_summary_no_installations():
 
 def _make_fake_jwt(payload: dict) -> str:
     """Build a minimal unsigned JWT for testing."""
-    import base64, json
+    import base64
+    import json
     header = base64.urlsafe_b64encode(b'{"alg":"none"}').rstrip(b"=").decode()
     body = base64.urlsafe_b64encode(json.dumps(payload).encode()).rstrip(b"=").decode()
     return f"{header}.{body}.fakesig"
