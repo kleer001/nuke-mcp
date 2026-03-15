@@ -18,7 +18,7 @@ NukeMCP connects AI assistants (Claude, ChatGPT, local LLMs) to a running Nuke s
 
 ## Status
 
-**Production-ready.** 66 tools/resources/prompts, verified end-to-end against Nuke 17.0v1. Full test suite with 123+ mock tests and CI with lint + coverage. See the [roadmap](ROADMAP.md) for what's next.
+**Production-ready.** 66 tools/resources/prompts, verified end-to-end against Nuke 17.0v1. Full test suite with 123+ mock tests and CI with lint + coverage. See the [roadmap](docs/ROADMAP.md) for what's next.
 
 ## Requirements
 
@@ -309,7 +309,7 @@ See [CONTRIBUTING.md](CONTRIBUTING.md) for how to add tools, write tests, and fo
 
 ## Best Practices
 
-See [BEST_PRACTICES.md](BEST_PRACTICES.md) for a compositor-focused guide to using NukeMCP effectively.
+See [BEST_PRACTICES.md](docs/BEST_PRACTICES.md) for a compositor-focused guide to using NukeMCP effectively.
 
 ## Acknowledgments
 
@@ -322,3 +322,7 @@ This project builds on the work of several open-source contributors:
 ## License
 
 MIT
+
+---
+
+<sub>NukeMCP is not affiliated with or endorsed by Foundry. Nuke is a trademark of Foundry.</sub>
