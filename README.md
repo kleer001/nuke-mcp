@@ -1,6 +1,18 @@
-# NukeMCP
+<p align="center">
+  <img src="logos/banner_light.svg" alt="NukeMCP — Talk to Nuke." width="700"/>
+</p>
 
-An MCP server for Foundry Nuke — AI copilot for compositors.
+<p align="center">
+  <a href="https://github.com/kleer001/nuke-mcp/blob/main/LICENSE"><img src="https://img.shields.io/github/license/kleer001/nuke-mcp?color=blue" alt="License: MIT"/></a>
+  <a href="https://www.python.org/"><img src="https://img.shields.io/badge/python-3.10%2B-blue?logo=python&logoColor=white" alt="Python 3.10+"/></a>
+  <a href="https://modelcontextprotocol.io/"><img src="https://img.shields.io/badge/MCP-compatible-green?logo=data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHdpZHRoPSIyNCIgaGVpZ2h0PSIyNCIgdmlld0JveD0iMCAwIDI0IDI0IiBmaWxsPSJ3aGl0ZSI+PHBhdGggZD0iTTEyIDJDNi40OCAyIDIgNi40OCAyIDEyczQuNDggMTAgMTAgMTAgMTAtNC40OCAxMC0xMFMxNy41MiAyIDEyIDJ6Ii8+PC9zdmc+" alt="MCP Compatible"/></a>
+  <a href="https://www.foundry.com/products/nuke-family/nuke"><img src="https://img.shields.io/badge/Nuke-17.0-E8A317?logo=data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHdpZHRoPSIyNCIgaGVpZ2h0PSIyNCIgdmlld0JveD0iMCAwIDI0IDI0IiBmaWxsPSJ3aGl0ZSI+PGNpcmNsZSBjeD0iMTIiIGN5PSIxMiIgcj0iMTAiLz48L3N2Zz4=&logoColor=white" alt="Nuke 17.0"/></a>
+  <a href="https://github.com/kleer001/nuke-mcp/commits/main"><img src="https://img.shields.io/github/last-commit/kleer001/nuke-mcp" alt="Last Commit"/></a>
+  <a href="https://github.com/kleer001/nuke-mcp/issues"><img src="https://img.shields.io/github/issues/kleer001/nuke-mcp" alt="Issues"/></a>
+  <a href="https://github.com/kleer001/nuke-mcp/network/members"><img src="https://img.shields.io/github/forks/kleer001/nuke-mcp?style=social" alt="Forks"/></a>
+  <a href="https://github.com/kleer001/nuke-mcp/watchers"><img src="https://img.shields.io/github/watchers/kleer001/nuke-mcp?style=social" alt="Watchers"/></a>
+  <a href="https://github.com/kleer001/nuke-mcp/stargazers"><img src="https://img.shields.io/github/stars/kleer001/nuke-mcp?style=social" alt="GitHub Stars"/></a>
+</p>
 
 NukeMCP connects AI assistants (Claude, ChatGPT, local LLMs) to a running Nuke session via the [Model Context Protocol](https://modelcontextprotocol.io). Describe what you want in plain English, and the AI creates, connects, and configures nodes in your comp.
 
