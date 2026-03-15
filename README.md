@@ -1,5 +1,5 @@
 <p align="center">
-  <img src="logos/banner_light.svg" alt="NukeMCP — Talk to Nuke." width="700"/>
+  <img src="docs/logos/banner_light.svg" alt="NukeMCP — Talk to Nuke." width="700"/>
 </p>
 
 <p align="center">
