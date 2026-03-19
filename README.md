@@ -307,6 +307,22 @@ The addon reports its Nuke version and variant on connection. Tools that require
 
 See [CONTRIBUTING.md](CONTRIBUTING.md) for how to add tools, write tests, and follow the codebase patterns.
 
+## Skills
+
+Skills are multi-step workflow guides that define how Claude should approach
+complex, repeatable production tasks using NukeMCP. Unlike single tool calls,
+skills orchestrate sequences of MCP tools, filesystem queries, and user
+confirmation gates to complete high-level operations safely.
+
+Skills live in the [`skills/`](skills/) folder. Invoke one by describing the task
+to Claude — it will recognise the workflow and follow the skill's phases.
+
+| Skill | Description |
+|---|---|
+| [`retarget-fx-shot`](skills/retarget-fx-shot.md) | Duplicate an FX rig network and remap all file references from one shot's sequences to another's |
+
+---
+
 ## Best Practices
 
 See [BEST_PRACTICES.md](docs/BEST_PRACTICES.md) for a compositor-focused guide to using NukeMCP effectively.
