@@ -18,7 +18,7 @@ NukeMCP connects AI assistants (Claude, ChatGPT, local LLMs) to a running Nuke s
 
 ## Status
 
-**Production-ready.** 66 tools/resources/prompts, verified end-to-end against Nuke 17.0v1. Full test suite with 123+ mock tests and CI with lint + coverage. See the [roadmap](docs/ROADMAP.md) for what's next.
+**Production-ready.** Verified end-to-end against Nuke 17.0v1. Full test suite with CI, lint, and coverage. See the [roadmap](docs/ROADMAP.md) for what's next.
 
 ## Requirements
 
@@ -30,30 +30,17 @@ NukeMCP connects AI assistants (Claude, ChatGPT, local LLMs) to a running Nuke s
 ## Quick Start
 
 ```bash
-# Clone and install
-git clone https://github.com/kleer001/nuke-mcp.git
-cd nuke-mcp
-uv sync
+# Install
+uv tool install git+https://github.com/kleer001/nuke-mcp
 
 # Find Nuke on your machine and check licensing
-uv run nuke-mcp --discover
+nuke-mcp --discover
 
 # Run with mock Nuke (no Nuke required)
-uv run nuke-mcp --mock
+nuke-mcp --mock
 
 # Launch headless Nuke and connect automatically
-uv run nuke-mcp --headless
-
-# Run tests
-uv run pytest -v
-```
-
-## Install from PyPI
-
-```bash
-pip install nuke-mcp
-# or
-uvx nuke-mcp --mock
+nuke-mcp --headless
 ```
 
 ## Nuke Addon Setup
@@ -81,13 +68,13 @@ NukeMCP can auto-discover and launch Nuke without a GUI:
 
 ```bash
 # Auto-discover Nuke, launch headless, connect
-uv run nuke-mcp --headless
+nuke-mcp --headless
 
 # Specify a Nuke executable
-uv run nuke-mcp --headless --nuke-path /usr/local/Nuke17.0v1/Nuke17.0
+nuke-mcp --headless --nuke-path /usr/local/Nuke17.0v1/Nuke17.0
 
 # Just find Nuke installations and check licensing
-uv run nuke-mcp --discover
+nuke-mcp --discover
 ```
 
 Discovery searches standard paths (`/usr/local/Nuke*`, `/Applications/Nuke*`), `.desktop` files, running processes, mounted volumes, and the `NUKE_EXE` environment variable. It also detects Foundry trial licenses (JWT tokens) and RLM license servers.
@@ -106,8 +93,8 @@ Add to your Claude Desktop config (`~/Library/Application Support/Claude/claude_
 {
   "mcpServers": {
     "nuke-mcp": {
-      "command": "uv",
-      "args": ["run", "--directory", "/path/to/nuke-mcp", "nuke-mcp"]
+      "command": "nuke-mcp",
+      "args": []
     }
   }
 }
@@ -134,10 +121,10 @@ Use an MCP-compatible client or framework that supports stdio transport. The ser
 
 ## Available Tools
 
-13 core tools available on all Nuke variants, plus gated tools for NukeX and Nuke 17+. Destructive tools require user confirmation — enforced at the code level, not just in the AI's instructions.
+Core tools available on all Nuke variants, plus gated tools for NukeX and Nuke 17+. Destructive tools require user confirmation — enforced at the code level, not just in the AI's instructions.
 
 <details>
-<summary>Full tool list (40+ tools)</summary>
+<summary>Full tool list</summary>
 
 ### Core (all variants)
 
@@ -165,7 +152,6 @@ Use an MCP-compatible client or framework that supports stdio transport. The ser
 | `set_proxy_mode` | Toggle proxy mode |
 | `find_nodes_by_type` | Find all nodes of a given class |
 | `find_broken_reads` | Find Read nodes with missing files |
-| `find_error_nodes` | Find all nodes in error state |
 | `batch_set_knob` | Set a knob value on multiple nodes |
 | `batch_reconnect` | Reconnect multiple nodes to a new input |
 
@@ -286,9 +272,9 @@ See `plugins/README.md` for details.
 Run the server against a mock Nuke socket — no Nuke installation required:
 
 ```bash
-uv run nuke-mcp --mock                           # Default: NukeX 17.0v1
-uv run nuke-mcp --mock --mock-variant Nuke        # Plain Nuke (no NukeX tools)
-uv run nuke-mcp --mock --mock-version 15.0v1      # Older version
+nuke-mcp --mock                           # Default: NukeX 17.0v1
+nuke-mcp --mock --mock-variant Nuke        # Plain Nuke (no NukeX tools)
+nuke-mcp --mock --mock-version 15.0v1      # Older version
 ```
 
 The mock maintains internal state (nodes, connections, settings) so sequential commands produce coherent responses.
