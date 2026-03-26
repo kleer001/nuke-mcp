@@ -1,13 +1,25 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
+REPO="https://github.com/kleer001/nuke-mcp.git"
+DIR="nuke-mcp"
+
 echo "=== NukeMCP Bootstrap ==="
 echo ""
 
-# Check for uv
-if ! command -v uv &> /dev/null; then
+# Clone if we're not already inside the repo
+if [ ! -f "pyproject.toml" ]; then
+    echo "Cloning nuke-mcp..."
+    git clone "$REPO" "$DIR"
+    cd "$DIR"
+    echo ""
+fi
+
+# Install uv if missing
+if ! command -v uv &>/dev/null; then
     echo "Installing uv..."
     curl -LsSf https://astral.sh/uv/install.sh | sh
+    export PATH="$HOME/.local/bin:$PATH"
     echo ""
 fi
 
@@ -15,28 +27,16 @@ echo "Installing dependencies..."
 uv sync
 echo ""
 
-echo "=== Setup Complete ==="
+echo "=== Done ==="
 echo ""
-echo "To run the MCP server (with mock Nuke for testing):"
-echo "  uv run nuke-mcp --mock"
+echo "Next steps:"
+echo "  1. Copy the Nuke addon:"
+echo "       cp nuke_addon/nuke_mcp_addon.py ~/.nuke/"
 echo ""
-echo "To run with a live Nuke session:"
-echo "  uv run nuke-mcp"
+echo "  2. In Nuke's Script Editor:"
+echo "       import nuke_mcp_addon; nuke_mcp_addon.start()"
 echo ""
-echo "To run tests:"
-echo "  uv run pytest"
+echo "  3. Test without Nuke:"
+echo "       uv run nuke-mcp --mock"
 echo ""
-echo "=== Nuke Addon Setup ==="
-echo ""
-echo "Copy the addon files into your Nuke scripts directory:"
-echo "  cp nuke_addon/nuke_mcp_addon.py ~/.nuke/"
-echo "  cp nuke_addon/menu.py ~/.nuke/"
-echo ""
-echo "Or add this repo's nuke_addon/ directory to your NUKE_PATH."
-echo ""
-echo "=== Claude Code / Claude Desktop ==="
-echo ""
-echo "Add this to your .mcp.json or Claude Desktop config:"
-echo ""
-cat .mcp.json
-echo ""
+echo "See README for MCP client configuration."

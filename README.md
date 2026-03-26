@@ -20,30 +20,34 @@ NukeMCP connects AI assistants (Claude, ChatGPT, local LLMs) to a running Nuke s
 
 **Production-ready.** Verified end-to-end against Nuke 17.0v1. Full test suite with CI, lint, and coverage. See the [roadmap](docs/ROADMAP.md) for what's next.
 
-## Requirements
+## Get Started
 
-- Python 3.10+
-- [uv](https://docs.astral.sh/uv/) package manager
-- Foundry Nuke 15+ (16+ recommended for PySide6, 17+ for full feature set)
-- An MCP-compatible AI client (Claude Code, Claude Desktop, etc.)
+**Prerequisites:** git and Python 3.10+. Nuke is optional at setup time — Nuke 15+ supported, 17+ recommended.
 
-## Quick Start
-
+**Linux / macOS:**
 ```bash
-# Install
-uv tool install git+https://github.com/kleer001/nuke-mcp
-
-# Find Nuke on your machine and check licensing
-nuke-mcp --discover
-
-# Run with mock Nuke (no Nuke required)
-nuke-mcp --mock
-
-# Launch headless Nuke and connect automatically
-nuke-mcp --headless
+curl -sSL https://raw.githubusercontent.com/kleer001/nuke-mcp/main/scripts/bootstrap.sh | bash
 ```
 
-## Nuke Addon Setup
+**Windows (PowerShell):**
+```powershell
+powershell -c "irm https://raw.githubusercontent.com/kleer001/nuke-mcp/main/scripts/bootstrap.bat -OutFile bootstrap.bat; .\bootstrap.bat"
+```
+
+The bootstrap clones the repo, installs [uv](https://docs.astral.sh/uv/), creates a venv, installs deps, and prints next steps for the Nuke addon and MCP client.
+
+<details>
+<summary><strong>Manual setup (step by step)</strong></summary>
+
+#### 1. Clone and install
+
+```bash
+git clone https://github.com/kleer001/nuke-mcp.git
+cd nuke-mcp
+uv sync
+```
+
+#### 2. Install the Nuke Addon
 
 Copy the addon into your Nuke scripts directory:
 
@@ -62,62 +66,43 @@ nuke_mcp_addon.start()
 
 A **NukeMCP** panel appears with Start/Stop button and log. The server listens on port 54321.
 
+#### 3. Configure Your MCP Client
+
+**Claude Code:** The included `.mcp.json` configures the server automatically. Run Claude Code from the project root.
+
+**Claude Desktop:** Go to **File > Settings > Developer > Edit Config** and add:
+
+```json
+{
+  "mcpServers": {
+    "nuke-mcp": {
+      "command": "uv",
+      "args": ["--directory", "/path/to/nuke-mcp", "run", "nuke-mcp"]
+    }
+  }
+}
+```
+
+**Other MCP clients (ChatGPT, local LLMs):** Any client that supports stdio transport works. Use the same command/args pattern above, or wrap the server in an HTTP bridge for remote clients.
+
+</details>
+
 ## Headless Mode
 
 NukeMCP can auto-discover and launch Nuke without a GUI:
 
 ```bash
 # Auto-discover Nuke, launch headless, connect
-nuke-mcp --headless
+uv run nuke-mcp --headless
 
 # Specify a Nuke executable
-nuke-mcp --headless --nuke-path /usr/local/Nuke17.0v1/Nuke17.0
+uv run nuke-mcp --headless --nuke-path /usr/local/Nuke17.0v1/Nuke17.0
 
 # Just find Nuke installations and check licensing
-nuke-mcp --discover
+uv run nuke-mcp --discover
 ```
 
 Discovery searches standard paths (`/usr/local/Nuke*`, `/Applications/Nuke*`), `.desktop` files, running processes, mounted volumes, and the `NUKE_EXE` environment variable. It also detects Foundry trial licenses (JWT tokens) and RLM license servers.
-
-## Connecting to an AI Client
-
-### Claude Code
-
-The included `.mcp.json` configures the server automatically. Run Claude Code from the project root.
-
-### Claude Desktop
-
-Add to your Claude Desktop config (`~/Library/Application Support/Claude/claude_desktop_config.json` on macOS):
-
-```json
-{
-  "mcpServers": {
-    "nuke-mcp": {
-      "command": "nuke-mcp",
-      "args": []
-    }
-  }
-}
-```
-
-### ChatGPT / Other MCP Clients
-
-Wrap the stdio server with an HTTP bridge. Any MCP-compatible client that supports stdio transport will work:
-
-```json
-{
-  "mcpServers": {
-    "nuke-mcp": {
-      "command": "nuke-mcp",
-      "args": []
-    }
-  }
-}
-```
-
-### Local LLMs (Ollama, LM Studio, etc.)
-
-Use an MCP-compatible client or framework that supports stdio transport. The server doesn't require any specific AI provider — it speaks standard MCP.
 
 ## Available Tools
 
@@ -272,9 +257,9 @@ See `plugins/README.md` for details.
 Run the server against a mock Nuke socket — no Nuke installation required:
 
 ```bash
-nuke-mcp --mock                           # Default: NukeX 17.0v1
-nuke-mcp --mock --mock-variant Nuke        # Plain Nuke (no NukeX tools)
-nuke-mcp --mock --mock-version 15.0v1      # Older version
+uv run nuke-mcp --mock                           # Default: NukeX 17.0v1
+uv run nuke-mcp --mock --mock-variant Nuke        # Plain Nuke (no NukeX tools)
+uv run nuke-mcp --mock --mock-version 15.0v1      # Older version
 ```
 
 The mock maintains internal state (nodes, connections, settings) so sequential commands produce coherent responses.

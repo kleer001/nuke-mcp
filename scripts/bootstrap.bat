@@ -1,6 +1,18 @@
 @echo off
+setlocal
+
+set REPO=https://github.com/kleer001/nuke-mcp.git
+set DIR=nuke-mcp
+
 echo === NukeMCP Bootstrap ===
 echo.
+
+if not exist pyproject.toml (
+    echo Cloning nuke-mcp...
+    git clone %REPO% %DIR%
+    cd %DIR%
+    echo.
+)
 
 where uv >nul 2>nul
 if %errorlevel% neq 0 (
@@ -13,20 +25,16 @@ echo Installing dependencies...
 uv sync
 echo.
 
-echo === Setup Complete ===
+echo === Done ===
 echo.
-echo To run the MCP server (with mock Nuke for testing):
-echo   uv run nuke-mcp --mock
+echo Next steps:
+echo   1. Copy the Nuke addon:
+echo        copy nuke_addon\nuke_mcp_addon.py %%USERPROFILE%%\.nuke\
 echo.
-echo To run with a live Nuke session:
-echo   uv run nuke-mcp
+echo   2. In Nuke's Script Editor:
+echo        import nuke_mcp_addon; nuke_mcp_addon.start()
 echo.
-echo To run tests:
-echo   uv run pytest
+echo   3. Test without Nuke:
+echo        uv run nuke-mcp --mock
 echo.
-echo === Nuke Addon Setup ===
-echo.
-echo Copy the addon files into your Nuke scripts directory:
-echo   copy nuke_addon\nuke_mcp_addon.py %%USERPROFILE%%\.nuke\
-echo   copy nuke_addon\menu.py %%USERPROFILE%%\.nuke\
-echo.
+echo See README for MCP client configuration.
