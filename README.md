@@ -193,90 +193,12 @@ Core tools available on all Nuke variants, plus gated tools for NukeX and Nuke 1
 
 </details>
 
-## Architecture
+## Docs & Guides
 
-```
-AI Client (Claude, etc.)
-    │ stdio (JSON-RPC)
-    ▼
-MCP Server (src/nukemcp/)
-    │ TCP socket (JSON)
-    ▼
-Nuke Addon (nuke_addon/)
-    │ executeInMainThread (GUI) / queue dispatch (headless)
-    ▼
-Nuke's Python Environment
-```
-
-Three layers, each with a clear job:
-
-1. **Nuke Addon** — runs inside Nuke, executes commands thread-safely, pushes real-time events via Nuke callbacks. Supports both GUI mode (executeInMainThread) and headless mode (queue-based dispatch).
-2. **MCP Server** — FastMCP 2.14.x, tool annotations, version gating, mock mode for offline dev, auto-discovery, headless launch, plugin system, persistent memory.
-3. **AI Guidance** — `CLAUDE.md` defines behavior rules: naming conventions, confirmation requirements, graph organization, memory usage.
-
-## Bidirectional Events
-
-The addon pushes real-time scene change events to the MCP server when subscribed:
-
-- `node_created` / `node_deleted` — track graph changes
-- `knob_changed` — parameter modifications
-- `script_loaded` / `script_saved` — file operations
-
-Subscribe via `subscribe_events()`, retrieve with `get_events()`.
-
-## Memory System
-
-NukeMCP maintains persistent memory across sessions:
-
-- **`memory/facility.md`** — studio conventions (colorspace, naming, paths, preferred tools)
-- **`memory/project/`** — auto-populated script snapshots
-- **`memory/corrections.md`** — logged corrections from the compositor
-
-Memory is exposed as MCP Resources (`nuke://memory/facility`, `nuke://memory/corrections`) for automatic context at session start.
-
-## Plugin System
-
-Extend NukeMCP without forking — drop Python files into `plugins/`:
-
-```python
-# plugins/my_studio_tools.py
-def register(server):
-    mcp = server.mcp
-    conn = server.connection
-
-    @mcp.tool()
-    def my_custom_tool(node_name: str) -> dict:
-        """Studio-specific tool."""
-        return conn.send_command("get_node_info", {"node_name": node_name})
-```
-
-See `plugins/README.md` for details.
-
-## Offline Development
-
-Run the server against a mock Nuke socket — no Nuke installation required:
-
-```bash
-uv run nuke-mcp --mock                           # Default: NukeX 17.0v1
-uv run nuke-mcp --mock --mock-variant Nuke        # Plain Nuke (no NukeX tools)
-uv run nuke-mcp --mock --mock-version 15.0v1      # Older version
-```
-
-The mock maintains internal state (nodes, connections, settings) so sequential commands produce coherent responses.
-
-## Version Gating
-
-The addon reports its Nuke version and variant on connection. Tools that require NukeX or a minimum Nuke version are gated — they simply don't appear if the connected Nuke doesn't support them.
-
-| Variant | Available |
-|---|---|
-| Nuke | Core tools (graph, script, comp, render, batch, templates) |
-| NukeX | + Tracking, 3D, Deep, CopyCat |
-| Nuke 17+ | + Gaussian Splats, BigCat, Annotations |
-
-## Contributing
-
-See [CONTRIBUTING.md](CONTRIBUTING.md) for how to add tools, write tests, and follow the codebase patterns.
+- [Technical Reference](docs/TECHNICAL.md) — architecture, events, memory system, plugin system, offline dev, version gating
+- [Best Practices](docs/BEST_PRACTICES.md) — compositor-focused guide with workflows and troubleshooting
+- [Roadmap](docs/ROADMAP.md) — what's next
+- [Contributing](CONTRIBUTING.md) — how to add tools, write tests, follow codebase patterns
 
 ## Skills
 
@@ -294,9 +216,15 @@ to Claude — it will recognise the workflow and follow the skill's phases.
 
 ---
 
-## Best Practices
+## Best Practices — The Recipe Book
 
-See [BEST_PRACTICES.md](docs/BEST_PRACTICES.md) for a compositor-focused guide to using NukeMCP effectively.
+Nuke is deep software, and the best way to learn it is from someone who's already been there. [**BEST_PRACTICES.md**](docs/BEST_PRACTICES.md) is a growing collection of practical recipes — the kind of knowledge that saves you hours.
+
+Every entry follows the same format: **what we tried, what surprised us, and what works.**
+
+This file is baked into Claude's context, so the AI builds on previous experience instead of starting from scratch. The more you use NukeMCP, the smarter it gets.
+
+**Got recipes to share?** As you work with NukeMCP, your AI will add entries to its own `BEST_PRACTICES.md`. If you've accumulated useful ones, [open an issue](https://github.com/kleer001/nuke-mcp/issues/new?labels=best-practice&title=Best+Practices+Contribution&body=Paste+your+BEST_PRACTICES.md+contents+below%0A%0A---%0A%0A) and paste your file — we'll merge the good stuff in for everyone.
 
 ## Acknowledgments
 
