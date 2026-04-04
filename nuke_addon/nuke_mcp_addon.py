@@ -758,7 +758,7 @@ class NukeMCPServer:
         """Call func in Nuke's main thread (GUI) or via queue (headless)."""
         nuke = _get_nuke()
         if nuke.GUI:
-            return nuke.executeInMainThread(func, args=args)
+            return nuke.executeInMainThreadWithResult(func, args=args)
         if self._main_queue is not None:
             result_q = queue.Queue()
             self._main_queue.put((func, args, result_q))
