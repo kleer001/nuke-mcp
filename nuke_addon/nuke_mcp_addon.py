@@ -100,16 +100,47 @@ def _handle_get_script_info(params: dict) -> dict:
 def _handle_get_node_info(params: dict) -> dict:
     nuke = _get_nuke()
     name = params["node_name"]
-    node = nuke.toNode(name)
+
+    if name == "Root":
+        node = nuke.root()
+    else:
+        node = nuke.toNode(name)
+
     if not node:
-        return {"status": "error", "error": f"Node '{name}' not found"}
+        return {
+            "status": "error",
+            "error": f"Node '{name}' not found",
+        }
 
     knobs = {}
+
     for knob_name in node.knobs():
         try:
-            knobs[knob_name] = node[knob_name].value()
+            value = node[knob_name].value()
+
+            try:
+                json.dumps(value)
+                knobs[knob_name] = value
+            except (TypeError, ValueError):
+                knobs[knob_name] = str(value)
+
         except Exception:
-            knobs[knob_name] = str(node[knob_name])
+            try:
+                knobs[knob_name] = str(node[knob_name])
+            except Exception:
+                knobs[knob_name] = "<unavailable>"
+
+    # Root is NOT a normal node
+    if name == "Root":
+        return {
+            "status": "ok",
+            "result": {
+                "name": "Root",
+                "class": "Root",
+                "inputs": [],
+                "knobs": knobs,
+            },
+        }
 
     inputs = []
     for i in range(node.inputs()):
@@ -738,7 +769,7 @@ class NukeMCPServer:
         self._server_sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         self._server_sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
         self._server_sock.settimeout(1.0)
-        self._server_sock.bind(("127.0.0.1", self.port))
+        self._server_sock.bind(("0.0.0.0", self.port))
         self._server_sock.listen(1)
         self._emit_log(f"Listening on port {self.port}")
 
@@ -751,84 +782,203 @@ class NukeMCPServer:
                 break
 
             self._emit_log(f"Client connected from {addr[0]}:{addr[1]}")
-            self._handle_client(client)
-            self._emit_log("Client disconnected")
+
+            client_thread = threading.Thread(
+                target=self._handle_client,
+                args=(client,),
+                daemon=True,
+                name=f"NukeMCP-Client-{addr[0]}:{addr[1]}",
+            )
+
+            client_thread.start()
 
     def _run_in_nuke(self, func, *args):
-        """Call func in Nuke's main thread (GUI) or via queue (headless)."""
+        """Execute a function safely inside Nuke's main thread.
+
+        Returns the function result.
+        """
+
         nuke = _get_nuke()
-        if nuke.GUI:
-            return nuke.executeInMainThread(func, args=args)
-        if self._main_queue is not None:
-            result_q = queue.Queue()
-            self._main_queue.put((func, args, result_q))
-            result = result_q.get()
+
+        # GUI Nuke
+        if getattr(nuke, "GUI", False):
+
+            # Nuke 13+ supports executeInMainThreadWithResult()
+            if hasattr(nuke, "executeInMainThreadWithResult"):
+                return nuke.executeInMainThreadWithResult(func, args=args)
+
+            # Older fallback
+            result_queue = queue.Queue()
+
+            def wrapper():
+                try:
+                    result_queue.put(func(*args))
+                except Exception as e:
+                    result_queue.put(e)
+
+            nuke.executeInMainThread(wrapper)
+
+            result = result_queue.get()
+
             if isinstance(result, Exception):
                 raise result
+
             return result
+
+        # Headless mode
+        if self._main_queue is not None:
+            result_q = queue.Queue()
+
+            self._main_queue.put((func, args, result_q))
+
+            result = result_q.get()
+
+            if isinstance(result, Exception):
+                raise result
+
+            return result
+
         return func(*args)
 
     def _handle_client(self, client: socket.socket):
+        """Handle one MCP client connection."""
+
         global _event_client_socket
+
         client.settimeout(None)
         _event_client_socket = client
 
-        # Send handshake
-        handshake = self._run_in_nuke(_handshake_data)
-        if not isinstance(handshake, dict):
+        try:
+
+            self._emit_log("Preparing handshake...")
+
+            handshake = self._run_in_nuke(_handshake_data)
+
+            self._emit_log(f"Handshake type: {type(handshake)}")
+            self._emit_log(f"Handshake value: {repr(handshake)}")
+
+            if not isinstance(handshake, dict):
+                self._emit_log("Handshake is not a dict. Closing connection.")
+                return
+
+            self._emit_log("Sending handshake...")
+
+            self._send(client, handshake)
+
+            self._emit_log("Handshake sent.")
+
+            buffer = b""
+
+            while self._running:
+
+                try:
+                    chunk = client.recv(1024 * 1024)
+                except (ConnectionResetError, OSError):
+                    self._emit_log("Client disconnected.")
+                    break
+
+                if not chunk:
+                    self._emit_log("Client closed socket.")
+                    break
+
+                buffer += chunk
+
+                while b"\n" in buffer:
+
+                    line, buffer = buffer.split(b"\n", 1)
+
+                    try:
+                        command = json.loads(line.decode("utf-8"))
+
+                    except json.JSONDecodeError as e:
+
+                        self._send(
+                            client,
+                            {
+                                "status": "error",
+                                "error": f"Invalid JSON: {e}",
+                            },
+                        )
+                        continue
+
+                    cmd_type = command.get("type", "")
+                    params = command.get("params", {})
+
+                    self._emit_log(f"<- {cmd_type}")
+
+                    handler = COMMANDS.get(cmd_type)
+
+                    if handler is None:
+
+                        response = {
+                            "status": "error",
+                            "error": f"Unknown command: {cmd_type}",
+                        }
+
+                    else:
+
+                        try:
+                            response = self._run_in_nuke(handler, params)
+
+                        except Exception as e:
+
+                            log.exception("Command failed")
+
+                            response = {
+                                "status": "error",
+                                "error": f"{type(e).__name__}: {e}",
+                            }
+
+                    if response is None:
+                        log.error("Handler %s returned None", cmd_type)
+                        response = {
+                            "status": "error",
+                            "error": "Handler returned None"
+                        }
+
+                    try:
+                        self._send(client, response)
+                    except OSError:
+                        self._emit_log("Client disconnected while sending")
+                        break
+                    status = response.get("status", "unknown") if isinstance(response, dict) else "invalid"
+                    self._emit_log(f"-> {status}")
+
+        except Exception:
+
+            log.exception("Client thread crashed")
+
+        finally:
+
+            _event_client_socket = None
+
+            try:
+                client.shutdown(socket.SHUT_RDWR)
+            except OSError:
+                pass
+
             try:
                 client.close()
             except OSError:
                 pass
-            return
-        self._send(client, handshake)
 
-        buffer = b""
-        while self._running:
-            try:
-                chunk = client.recv(1024 * 1024)
-            except OSError:
-                break
-            if not chunk:
-                break
-
-            buffer += chunk
-            while b"\n" in buffer:
-                line, buffer = buffer.split(b"\n", 1)
-                try:
-                    command = json.loads(line.decode("utf-8"))
-                except json.JSONDecodeError as e:
-                    self._send(client, {"status": "error", "error": f"Invalid JSON: {e}"})
-                    continue
-
-                cmd_type = command.get("type", "")
-                params = command.get("params", {})
-                self._emit_log(f"<- {cmd_type}")
-
-                handler = COMMANDS.get(cmd_type)
-                if not handler:
-                    response = {"status": "error", "error": f"Unknown command: {cmd_type}"}
-                else:
-                    try:
-                        response = self._run_in_nuke(handler, params)
-                    except Exception as e:
-                        response = {"status": "error", "error": f"{type(e).__name__}: {e}"}
-
-                self._send(client, response)
-                self._emit_log(f"-> {response.get('status', '?')}")
-
-        _event_client_socket = None
-        try:
-            client.close()
-        except OSError:
-            pass
+            self._emit_log("Client disconnected")
 
     def _send(self, client: socket.socket, data: dict):
-        msg = json.dumps(data) + "\n"
+        """Send one newline-delimited JSON message."""
+
         try:
+
+            msg = json.dumps(data) + "\n"
+
+            self._emit_log(f"TX: {msg.strip()}")
+
             client.sendall(msg.encode("utf-8"))
-        except OSError:
-            pass
+
+        except Exception:
+
+            log.exception("Socket send failed")
+            raise
 
     def _emit_log(self, msg: str):
         log.info(msg)
