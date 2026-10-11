@@ -244,13 +244,14 @@ def _handle_auto_layout(params: dict) -> dict:
 
 def _handle_execute_python(params: dict) -> dict:
     code = params["code"]
-    local_vars = {}
+    # One namespace for globals and locals, so functions and comprehensions see top-level names.
+    namespace = {"nuke": _get_nuke(), "__builtins__": __builtins__}
     try:
-        exec(code, {"nuke": _get_nuke(), "__builtins__": __builtins__}, local_vars)  # noqa: S102
+        exec(code, namespace)  # noqa: S102
     except Exception as e:
         return {"status": "error", "error": f"{type(e).__name__}: {e}"}
     # Return whatever was assigned to 'result' in the executed code, or None
-    result = local_vars.get("result")
+    result = namespace.get("result")
     # Try to serialize; fall back to str
     try:
         json.dumps(result)
